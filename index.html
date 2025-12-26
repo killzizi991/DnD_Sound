@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -14,28 +15,43 @@
             <p class="subtitle">Загрузите 3 трека и воспроизводите их одновременно, не прерывая фоновую музыку</p>
         </header>
 
-        <div class="upload-section">
-            <h2 class="upload-title">📁 Загрузка аудиофайлов</h2>
-            <div class="upload-area">
-                <input type="file" class="file-input" accept="audio/*" multiple>
-                <button class="upload-btn" id="uploadBtn">Загрузить треки</button>
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="folder-section">
+                    <h2 class="folder-title">📂 Папки</h2>
+                    <button class="add-folder-btn" id="addFolderBtn">+ Создать папку</button>
+                    <div class="folder-list" id="folderPanel">
+                        <!-- Папки будут созданы здесь -->
+                    </div>
+                </div>
             </div>
-            <div class="status" id="uploadStatus">Нет загруженных треков</div>
-        </div>
 
-        <div class="soundboard" id="soundboard">
-            <!-- Карточки звуков будут созданы здесь -->
-        </div>
+            <div class="content">
+                <div class="upload-section">
+                    <h2 class="upload-title">📁 Загрузка аудиофайлов</h2>
+                    <div class="upload-area">
+                        <input type="file" class="file-input" accept="audio/*" multiple>
+                        <button class="upload-btn" id="uploadBtn">Загрузить треки</button>
+                        <button class="edit-mode-btn" id="toggleEditBtn">Режим редактирования</button>
+                    </div>
+                    <div class="status" id="uploadStatus">Нет загруженных треков</div>
+                </div>
 
-        <div class="mixer-panel">
-            <div class="mixer-header">
-                <h2>🎚️ Панель микшера</h2>
-                <div class="active-count">Активно: <span id="activeCount">0</span></div>
-            </div>
-            <div class="mixer-controls">
-                <button class="mixer-btn sync-btn" id="syncAll">Синхронизировать все</button>
-                <button class="mixer-btn pause-all-btn" id="pauseAll">Пауза всех</button>
-                <button class="mixer-btn stop-all-btn" id="stopAll">Остановить все</button>
+                <div class="soundboard" id="soundboard">
+                    <!-- Карточки звуков будут созданы здесь -->
+                </div>
+
+                <div class="mixer-panel">
+                    <div class="mixer-header">
+                        <h2>🎚️ Панель микшера</h2>
+                        <div class="active-count">Активно: <span id="activeCount">0</span></div>
+                    </div>
+                    <div class="mixer-controls">
+                        <button class="mixer-btn sync-btn" id="syncAll">Синхронизировать все</button>
+                        <button class="mixer-btn pause-all-btn" id="pauseAll">Пауза всех</button>
+                        <button class="mixer-btn stop-all-btn" id="stopAll">Остановить все</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
