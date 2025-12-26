@@ -1,3 +1,4 @@
+
 // app.js
 class AudioEngine {
     constructor() {
@@ -126,6 +127,23 @@ class AudioEngine {
         }
     }
 
+    setLoop(id, loop) {
+        if (this.sounds.has(id)) {
+            const sound = this.sounds.get(id);
+            sound.loop = loop;
+            
+            // Обновить loop для всех активных источников этого звука
+            this.activeSources.forEach((activeSound, sourceId) => {
+                if (activeSound.soundId === id && activeSound.source) {
+                    activeSound.source.loop = loop;
+                }
+            });
+            
+            return true;
+        }
+        return false;
+    }
+
     stopAll() {
         this.activeSources.forEach((_, sourceId) => {
             this.stopSound(sourceId);
@@ -174,8 +192,8 @@ class SoundboardApp {
         this.audioEngine = new AudioEngine();
         this.loadedSounds = new Map();
         this.activeSounds = new Map();
-        this.maxSounds = 10; // Увеличиваем лимит для добавления новых звуков
-        this.soundCounter = 0; // Счетчик для уникальных ID звуков
+        this.maxSounds = 10;
+        this.soundCounter = 0;
         this.init();
     }
 
@@ -212,7 +230,6 @@ class SoundboardApp {
         
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            // Генерируем уникальный ID для каждого звука, используя счетчик
             const soundId = `sound_${Date.now()}_${this.soundCounter++}`;
             
             const success = await this.audioEngine.loadSound(soundId, file);
@@ -230,7 +247,6 @@ class SoundboardApp {
         document.getElementById('uploadBtn').disabled = false;
         this.renderSoundboard();
         
-        // Очищаем поле выбора файлов, чтобы можно было загружать те же файлы снова
         fileInput.value = '';
     }
 
@@ -288,6 +304,17 @@ class SoundboardApp {
         }
     }
 
+    toggleLoop(soundId) {
+        const sound = this.audioEngine.sounds.get(soundId);
+        if (sound) {
+            const newLoopState = !sound.loop;
+            this.audioEngine.setLoop(soundId, newLoopState);
+            this.updateLoopButton(soundId, newLoopState);
+            return newLoopState;
+        }
+        return false;
+    }
+
     renderSoundboard() {
         const soundboard = document.getElementById('soundboard');
         soundboard.innerHTML = '';
@@ -309,15 +336,22 @@ class SoundboardApp {
         
         this.loadedSounds.forEach((sound, soundId) => {
             const isActive = this.activeSounds.has(soundId);
+            const audioSound = this.audioEngine.sounds.get(soundId);
+            const isLoop = audioSound ? audioSound.loop : false;
             
             const soundCard = document.createElement('div');
             soundCard.className = `sound-card ${isActive ? 'active' : ''}`;
             soundCard.innerHTML = `
                 <div class="sound-icon">${this.getSoundEmoji(sound.name)}</div>
                 <div class="sound-name">${sound.name}</div>
-                <div class="volume-control">
-                    <span>🔈</span>
-                    <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1">
+                <div class="sound-settings">
+                    <div class="volume-control">
+                        <span>🔈</span>
+                        <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1">
+                    </div>
+                    <button class="loop-btn ${isLoop ? 'active' : ''}" data-sound="${soundId}">
+                        ${isLoop ? '🔂' : '🔁'}
+                    </button>
                 </div>
                 <div class="sound-controls">
                     <button class="play-btn ${isActive ? 'playing' : ''}" data-sound="${soundId}">
@@ -330,6 +364,7 @@ class SoundboardApp {
             const playBtn = soundCard.querySelector('.play-btn');
             const stopBtn = soundCard.querySelector('.stop-btn');
             const volumeSlider = soundCard.querySelector('.volume-slider');
+            const loopBtn = soundCard.querySelector('.loop-btn');
             
             playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -347,6 +382,13 @@ class SoundboardApp {
                 this.updateVolume(soundId, volume);
             });
             
+            loopBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newLoopState = this.toggleLoop(soundId);
+                loopBtn.classList.toggle('active', newLoopState);
+                loopBtn.innerHTML = newLoopState ? '🔂' : '🔁';
+            });
+            
             soundboard.appendChild(soundCard);
         });
     }
@@ -359,6 +401,17 @@ class SoundboardApp {
             if (playBtn) {
                 playBtn.classList.toggle('playing', isActive);
                 playBtn.innerHTML = isActive ? '⏸️' : '▶️';
+            }
+        }
+    }
+
+    updateLoopButton(soundId, isLoop) {
+        const card = document.querySelector(`[data-sound="${soundId}"]`)?.closest('.sound-card');
+        if (card) {
+            const loopBtn = card.querySelector('.loop-btn');
+            if (loopBtn) {
+                loopBtn.classList.toggle('active', isLoop);
+                loopBtn.innerHTML = isLoop ? '🔂' : '🔁';
             }
         }
     }
@@ -409,3 +462,4 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+[file content end]
