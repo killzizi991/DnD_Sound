@@ -6,9 +6,21 @@ class AudioEngine {
         this.sounds = new Map();
         this.activeSources = new Map();
         this.masterVolume = 1.0;
+        this.folders = new Map();
+        this.nextFolderId = 1;
+        this.initDefaultFolders();
     }
 
-    async loadSound(id, file) {
+    initDefaultFolders() {
+        this.folders.set('default', {
+            id: 'default',
+            name: 'Все звуки',
+            color: '#6c5ce7',
+            icon: '📁'
+        });
+    }
+
+    async loadSound(id, file, folderId = 'default') {
         try {
             const arrayBuffer = await file.arrayBuffer();
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
@@ -17,7 +29,8 @@ class AudioEngine {
                 buffer: audioBuffer,
                 name: file.name,
                 volume: 1.0,
-                loop: false
+                loop: false,
+                folderId: folderId
             });
             
             return true;
@@ -51,7 +64,8 @@ class AudioEngine {
             soundId: id,
             paused: false,
             startTime: this.audioContext.currentTime,
-            pausedTime: 0
+            pausedTime: 0,
+            folderId: sound.folderId
         });
         
         if (!sound.loop) {
@@ -132,7 +146,6 @@ class AudioEngine {
             const sound = this.sounds.get(id);
             sound.loop = loop;
             
-            // Обновить loop для всех активных источников этого звука
             this.activeSources.forEach((activeSound, sourceId) => {
                 if (activeSound.soundId === id && activeSound.source) {
                     activeSound.source.loop = loop;
@@ -142,6 +155,66 @@ class AudioEngine {
             return true;
         }
         return false;
+    }
+
+    createFolder(name, color = '#6c5ce7', icon = '📁') {
+        const folderId = `folder_${this.nextFolderId++}`;
+        this.folders.set(folderId, {
+            id: folderId,
+            name: name,
+            color: color,
+            icon: icon
+        });
+        return folderId;
+    }
+
+    updateFolder(folderId, updates) {
+        if (this.folders.has(folderId)) {
+            const folder = this.folders.get(folderId);
+            Object.assign(folder, updates);
+            return true;
+        }
+        return false;
+    }
+
+    deleteFolder(folderId) {
+        if (folderId === 'default') return false;
+        
+        this.folders.delete(folderId);
+        
+        this.sounds.forEach((sound, soundId) => {
+            if (sound.folderId === folderId) {
+                sound.folderId = 'default';
+            }
+        });
+        
+        return true;
+    }
+
+    getSoundsByFolder(folderId) {
+        const folderSounds = [];
+        this.sounds.forEach((sound, soundId) => {
+            if (sound.folderId === folderId) {
+                folderSounds.push({
+                    id: soundId,
+                    ...sound
+                });
+            }
+        });
+        return folderSounds;
+    }
+
+    getActiveSoundsByFolder(folderId) {
+        const activeFolderSounds = [];
+        this.activeSources.forEach((activeSound, sourceId) => {
+            if (activeSound.folderId === folderId) {
+                activeFolderSounds.push({
+                    sourceId: sourceId,
+                    ...activeSound
+                });
+            }
+        });
+        return activeFolderSounds;
     }
 
     stopAll() {
@@ -192,13 +265,15 @@ class SoundboardApp {
         this.audioEngine = new AudioEngine();
         this.loadedSounds = new Map();
         this.activeSounds = new Map();
-        this.maxSounds = 10;
         this.soundCounter = 0;
+        this.selectedFolder = 'default';
+        this.editMode = false;
         this.init();
     }
 
     init() {
         this.bindEvents();
+        this.renderFolderPanel();
         this.renderSoundboard();
         this.checkAudioContext();
     }
@@ -208,6 +283,8 @@ class SoundboardApp {
         document.getElementById('syncAll').addEventListener('click', () => this.audioEngine.syncAll());
         document.getElementById('pauseAll').addEventListener('click', () => this.togglePauseAll());
         document.getElementById('stopAll').addEventListener('click', () => this.stopAll());
+        document.getElementById('addFolderBtn').addEventListener('click', () => this.showAddFolderDialog());
+        document.getElementById('toggleEditBtn').addEventListener('click', () => this.toggleEditMode());
         
         document.addEventListener('click', () => {
             this.audioEngine.resumeAudioContext();
@@ -232,12 +309,13 @@ class SoundboardApp {
             const file = files[i];
             const soundId = `sound_${Date.now()}_${this.soundCounter++}`;
             
-            const success = await this.audioEngine.loadSound(soundId, file);
+            const success = await this.audioEngine.loadSound(soundId, file, this.selectedFolder);
             if (success) {
                 this.loadedSounds.set(soundId, {
                     id: soundId,
                     name: file.name.replace(/\.[^/.]+$/, ""),
-                    file: file
+                    file: file,
+                    folderId: this.selectedFolder
                 });
                 loadedCount++;
             }
@@ -315,16 +393,78 @@ class SoundboardApp {
         return false;
     }
 
+    showAddFolderDialog() {
+        const folderName = prompt('Введите название новой папки:', 'Новая папка');
+        if (folderName && folderName.trim()) {
+            const folderId = this.audioEngine.createFolder(folderName.trim());
+            this.updateStatus(`Создана папка "${folderName}"`);
+            this.renderFolderPanel();
+            this.selectFolder(folderId);
+        }
+    }
+
+    selectFolder(folderId) {
+        this.selectedFolder = folderId;
+        this.renderFolderPanel();
+        this.renderSoundboard();
+        
+        const folder = this.audioEngine.folders.get(folderId);
+        if (folder) {
+            this.updateStatus(`Выбрана папка: ${folder.name}`);
+        }
+    }
+
+    toggleEditMode() {
+        this.editMode = !this.editMode;
+        const editBtn = document.getElementById('toggleEditBtn');
+        
+        if (this.editMode) {
+            editBtn.textContent = 'Завершить редактирование';
+            editBtn.classList.add('active');
+            this.updateStatus('Режим редактирования включен');
+        } else {
+            editBtn.textContent = 'Режим редактирования';
+            editBtn.classList.remove('active');
+            this.updateStatus('Режим редактирования выключен');
+        }
+        
+        this.renderSoundboard();
+    }
+
+    renderFolderPanel() {
+        const folderPanel = document.getElementById('folderPanel');
+        folderPanel.innerHTML = '';
+        
+        this.audioEngine.folders.forEach((folder, folderId) => {
+            const folderElement = document.createElement('div');
+            folderElement.className = `folder-item ${this.selectedFolder === folderId ? 'active' : ''}`;
+            folderElement.style.borderLeftColor = folder.color;
+            folderElement.innerHTML = `
+                <div class="folder-icon">${folder.icon}</div>
+                <div class="folder-name">${folder.name}</div>
+                <div class="folder-count">${this.audioEngine.getSoundsByFolder(folderId).length}</div>
+            `;
+            
+            folderElement.addEventListener('click', () => {
+                this.selectFolder(folderId);
+            });
+            
+            folderPanel.appendChild(folderElement);
+        });
+    }
+
     renderSoundboard() {
         const soundboard = document.getElementById('soundboard');
         soundboard.innerHTML = '';
         
-        if (this.loadedSounds.size === 0) {
+        const folderSounds = this.audioEngine.getSoundsByFolder(this.selectedFolder);
+        
+        if (folderSounds.length === 0) {
             const emptyCard = document.createElement('div');
-            emptyCard.className = 'sound-card';
+            emptyCard.className = 'sound-card empty';
             emptyCard.innerHTML = `
                 <div class="sound-icon">🎵</div>
-                <div class="sound-name">Нет загруженных треков</div>
+                <div class="sound-name">${this.selectedFolder === 'default' ? 'Нет загруженных треков' : 'Папка пуста'}</div>
                 <div class="sound-controls">
                     <button class="play-btn" disabled>Воспроизвести</button>
                     <button class="stop-btn" disabled>Остановить</button>
@@ -334,20 +474,21 @@ class SoundboardApp {
             return;
         }
         
-        this.loadedSounds.forEach((sound, soundId) => {
+        folderSounds.forEach((sound) => {
+            const soundId = sound.id;
             const isActive = this.activeSounds.has(soundId);
-            const audioSound = this.audioEngine.sounds.get(soundId);
-            const isLoop = audioSound ? audioSound.loop : false;
+            const isLoop = sound.loop;
             
             const soundCard = document.createElement('div');
             soundCard.className = `sound-card ${isActive ? 'active' : ''}`;
             soundCard.innerHTML = `
+                ${this.editMode ? '<button class="delete-btn" data-sound="${soundId}">🗑️</button>' : ''}
                 <div class="sound-icon">${this.getSoundEmoji(sound.name)}</div>
                 <div class="sound-name">${sound.name}</div>
                 <div class="sound-settings">
                     <div class="volume-control">
                         <span>🔈</span>
-                        <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1">
+                        <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="${sound.volume}">
                     </div>
                     <button class="loop-btn ${isLoop ? 'active' : ''}" data-sound="${soundId}">
                         ${isLoop ? '🔂' : '🔁'}
@@ -365,6 +506,7 @@ class SoundboardApp {
             const stopBtn = soundCard.querySelector('.stop-btn');
             const volumeSlider = soundCard.querySelector('.volume-slider');
             const loopBtn = soundCard.querySelector('.loop-btn');
+            const deleteBtn = soundCard.querySelector('.delete-btn');
             
             playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -389,8 +531,25 @@ class SoundboardApp {
                 loopBtn.innerHTML = newLoopState ? '🔂' : '🔁';
             });
             
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm('Удалить этот звук?')) {
+                        this.deleteSound(soundId);
+                    }
+                });
+            }
+            
             soundboard.appendChild(soundCard);
         });
+    }
+
+    deleteSound(soundId) {
+        this.stopSound(soundId);
+        this.audioEngine.sounds.delete(soundId);
+        this.loadedSounds.delete(soundId);
+        this.renderSoundboard();
+        this.updateStatus('Звук удален');
     }
 
     updateSoundCard(soundId, isActive) {
@@ -462,5 +621,3 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
-
