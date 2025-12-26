@@ -39,7 +39,8 @@ class AudioEngine {
             for (const [id, soundData] of sounds) {
                 if (soundData.blob) {
                     await this.loadSoundFromBlob(id, soundData.blob, soundData.name, 
-                                               soundData.folderId, soundData.volume, soundData.loop);
+                                               soundData.folderId, soundData.volume, 
+                                               soundData.loop, soundData.color, soundData.icon);
                 }
             }
         } catch (error) {
@@ -61,7 +62,6 @@ class AudioEngine {
     async saveSoundSettings(soundId) {
         const sound = this.sounds.get(soundId);
         if (sound) {
-            // Individual sound settings are saved in the sounds store
             await this.saveToStorage();
         }
     }
@@ -82,12 +82,14 @@ class AudioEngine {
             
             this.sounds.set(id, {
                 buffer: audioBuffer,
-                name: file.name,
+                name: file.name.replace(/\.[^/.]+$/, ""),
                 volume: 1.0,
                 loop: false,
                 folderId: folderId,
                 blob: file,
-                fileName: file.name
+                fileName: file.name,
+                color: '#6c5ce7',
+                icon: '🎵'
             });
             
             await this.saveToStorage();
@@ -98,7 +100,8 @@ class AudioEngine {
         }
     }
 
-    async loadSoundFromBlob(id, blob, name, folderId = 'default', volume = 1.0, loop = false) {
+    async loadSoundFromBlob(id, blob, name, folderId = 'default', volume = 1.0, 
+                           loop = false, color = '#6c5ce7', icon = '🎵') {
         try {
             const arrayBuffer = await blob.arrayBuffer();
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
@@ -110,7 +113,9 @@ class AudioEngine {
                 loop: loop,
                 folderId: folderId,
                 blob: blob,
-                fileName: name
+                fileName: name + '.mp3',
+                color: color,
+                icon: icon
             });
             
             return true;
@@ -371,6 +376,7 @@ class SoundboardApp {
         this.soundCounter = 0;
         this.selectedFolder = 'default';
         this.editMode = false;
+        this.soundEditor = new SoundEditor(this);
         this.init();
     }
 
@@ -586,9 +592,15 @@ class SoundboardApp {
             
             const soundCard = document.createElement('div');
             soundCard.className = `sound-card ${isActive ? 'active' : ''}`;
+            soundCard.style.backgroundColor = sound.color || '#1f4068';
             soundCard.innerHTML = `
-                ${this.editMode ? '<button class="delete-btn" data-sound="${soundId}">🗑️</button>' : ''}
-                <div class="sound-icon">${this.getSoundEmoji(sound.name)}</div>
+                ${this.editMode ? `
+                    <div class="edit-controls">
+                        <button class="edit-btn" data-sound="${soundId}">✏️</button>
+                        <button class="delete-btn" data-sound="${soundId}">🗑️</button>
+                    </div>
+                ` : ''}
+                <div class="sound-icon">${sound.icon || this.getSoundEmoji(sound.name)}</div>
                 <div class="sound-name">${sound.name}</div>
                 <div class="sound-settings">
                     <div class="volume-control">
@@ -611,6 +623,7 @@ class SoundboardApp {
             const stopBtn = soundCard.querySelector('.stop-btn');
             const volumeSlider = soundCard.querySelector('.volume-slider');
             const loopBtn = soundCard.querySelector('.loop-btn');
+            const editBtn = soundCard.querySelector('.edit-btn');
             const deleteBtn = soundCard.querySelector('.delete-btn');
             
             playBtn.addEventListener('click', (e) => {
@@ -635,6 +648,13 @@ class SoundboardApp {
                 loopBtn.classList.toggle('active', newLoopState);
                 loopBtn.innerHTML = newLoopState ? '🔂' : '🔁';
             });
+            
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.soundEditor.show(soundId);
+                });
+            }
             
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
