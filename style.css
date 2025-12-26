@@ -1,3 +1,4 @@
+
 /* style.css */
 * {
     margin: 0;
@@ -130,6 +131,49 @@ h1 {
     width: 100%;
 }
 
+.sound-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.loop-btn {
+    background: transparent;
+    border: 2px solid #4a4a6d;
+    border-radius: 5px;
+    color: #e0e0e0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s;
+    padding: 0;
+}
+
+.loop-btn.active {
+    background: #6c5ce7;
+    border-color: #6c5ce7;
+    color: white;
+}
+
+.loop-btn:hover {
+    background: #5b4bda;
+    border-color: #5b4bda;
+    color: white;
+}
+
 .sound-controls {
     display: flex;
     gap: 10px;
@@ -166,13 +210,6 @@ h1 {
 
 .stop-btn:hover {
     background: #ff5252;
-}
-
-.volume-control {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
 }
 
 .volume-slider {
@@ -281,6 +318,19 @@ h1 {
         padding: 15px;
     }
     
+    .sound-settings {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .volume-control {
+        width: 100%;
+    }
+    
+    .loop-btn {
+        align-self: flex-end;
+    }
+    
     .mixer-controls {
         flex-direction: column;
     }
@@ -299,3 +349,4 @@ h1 {
         padding: 10px;
     }
 }
+[file content end]
