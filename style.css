@@ -15,7 +15,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
 }
 
@@ -36,6 +36,100 @@ h1 {
     margin-bottom: 20px;
 }
 
+.main-content {
+    display: flex;
+    gap: 20px;
+}
+
+.sidebar {
+    width: 250px;
+    flex-shrink: 0;
+}
+
+.folder-section {
+    background: #162447;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 2px solid #4a4a6d;
+}
+
+.folder-title {
+    color: #64dfdf;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.add-folder-btn {
+    width: 100%;
+    background: #00b894;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-bottom: 15px;
+    transition: background 0.3s;
+}
+
+.add-folder-btn:hover {
+    background: #00a085;
+}
+
+.folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: #1f4068;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border-left: 4px solid #6c5ce7;
+}
+
+.folder-item:hover {
+    background: #2c5282;
+}
+
+.folder-item.active {
+    background: #4a4a6d;
+    border-left-color: #ff6b6b;
+}
+
+.folder-icon {
+    font-size: 18px;
+}
+
+.folder-name {
+    flex: 1;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-count {
+    background: #4a4a6d;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 12px;
+}
+
+.content {
+    flex: 1;
+}
+
 .upload-section {
     background: #162447;
     padding: 20px;
@@ -54,12 +148,14 @@ h1 {
 
 .upload-area {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 15px;
     margin-bottom: 20px;
 }
 
 .file-input {
+    flex: 1;
+    min-width: 200px;
     padding: 10px;
     background: #1f4068;
     border: 2px solid #4a4a6d;
@@ -88,9 +184,30 @@ h1 {
     cursor: not-allowed;
 }
 
+.edit-mode-btn {
+    background: #fdcb6e;
+    color: #2d3436;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.edit-mode-btn:hover {
+    background: #f9c855;
+}
+
+.edit-mode-btn.active {
+    background: #ff6b6b;
+    color: white;
+}
+
 .soundboard {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 20px;
     margin-bottom: 30px;
 }
@@ -105,11 +222,39 @@ h1 {
     gap: 15px;
     border: 2px solid transparent;
     transition: all 0.3s;
+    position: relative;
+}
+
+.sound-card.empty {
+    opacity: 0.7;
 }
 
 .sound-card.active {
     border-color: #00b894;
     box-shadow: 0 0 20px rgba(0, 184, 148, 0.3);
+}
+
+.delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #ff6b6b;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s;
+    padding: 0;
+}
+
+.delete-btn:hover {
+    background: #ff5252;
 }
 
 .sound-icon {
@@ -309,6 +454,16 @@ h1 {
     to { opacity: 1; }
 }
 
+@media (max-width: 1024px) {
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+    }
+}
+
 @media (max-width: 768px) {
     .soundboard {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -338,6 +493,14 @@ h1 {
     .mixer-btn {
         width: 100%;
     }
+    
+    .upload-area {
+        flex-direction: column;
+    }
+    
+    .file-input {
+        min-width: 100%;
+    }
 }
 
 @media (max-width: 480px) {
@@ -349,4 +512,8 @@ h1 {
         padding: 10px;
     }
 }
+
+
+
+
 
