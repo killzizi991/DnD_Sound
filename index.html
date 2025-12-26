@@ -1,4 +1,4 @@
-
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -23,6 +23,13 @@
                     <div class="folder-list" id="folderPanel">
                         <!-- Папки будут созданы здесь -->
                     </div>
+                </div>
+                
+                <div class="data-management">
+                    <h3>Управление данными</h3>
+                    <button class="data-btn export-btn" id="exportBtn">📤 Экспорт</button>
+                    <button class="data-btn import-btn" id="importBtn">📥 Импорт</button>
+                    <button class="data-btn clear-btn" id="clearBtn">🗑️ Очистить всё</button>
                 </div>
             </div>
 
@@ -56,6 +63,7 @@
         </div>
     </div>
 
+    <script src="storage.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
