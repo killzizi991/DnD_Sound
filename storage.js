@@ -2,7 +2,7 @@
 class StorageManager {
     constructor() {
         this.dbName = 'DndSoundboardDB';
-        this.dbVersion = 1;
+        this.dbVersion = 2; // Увеличиваем версию для новых полей
         this.db = null;
         this.initialized = false;
     }
@@ -25,22 +25,46 @@ class StorageManager {
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
+                const oldVersion = event.oldVersion;
                 
-                // Create folders store
-                if (!db.objectStoreNames.contains('folders')) {
-                    const foldersStore = db.createObjectStore('folders', { keyPath: 'id' });
-                    foldersStore.createIndex('parentId', 'parentId', { unique: false });
-                }
+                // Миграция с версии 1 на версию 2
+                if (oldVersion < 1) {
+                    // Create folders store
+                    if (!db.objectStoreNames.contains('folders')) {
+                        const foldersStore = db.createObjectStore('folders', { keyPath: 'id' });
+                        foldersStore.createIndex('parentId', 'parentId', { unique: false });
+                    }
 
-                // Create sounds store
-                if (!db.objectStoreNames.contains('sounds')) {
-                    const soundsStore = db.createObjectStore('sounds', { keyPath: 'id' });
-                    soundsStore.createIndex('folderId', 'folderId', { unique: false });
-                }
+                    // Create sounds store
+                    if (!db.objectStoreNames.contains('sounds')) {
+                        const soundsStore = db.createObjectStore('sounds', { keyPath: 'id' });
+                        soundsStore.createIndex('folderId', 'folderId', { unique: false });
+                    }
 
-                // Create settings store
-                if (!db.objectStoreNames.contains('settings')) {
-                    db.createObjectStore('settings', { keyPath: 'key' });
+                    // Create settings store
+                    if (!db.objectStoreNames.contains('settings')) {
+                        db.createObjectStore('settings', { keyPath: 'key' });
+                    }
+                }
+                
+                // Миграция с версии 1 на версию 2: добавление полей color и icon
+                if (oldVersion < 2) {
+                    const transaction = event.target.transaction;
+                    const soundsStore = transaction.objectStore('sounds');
+                    
+                    // Открываем курсор для обновления существующих записей
+                    const request = soundsStore.openCursor();
+                    request.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            const sound = cursor.value;
+                            // Добавляем новые поля со значениями по умолчанию
+                            sound.color = sound.color || '#6c5ce7';
+                            sound.icon = sound.icon || '🎵';
+                            cursor.update(sound);
+                            cursor.continue();
+                        }
+                    };
                 }
             };
         });
@@ -104,7 +128,9 @@ class StorageManager {
                         loop: sound.loop,
                         folderId: sound.folderId,
                         audioData: sound.blob ? this.blobToArrayBuffer(sound.blob) : null,
-                        fileName: sound.fileName
+                        fileName: sound.fileName,
+                        color: sound.color || '#6c5ce7',
+                        icon: sound.icon || '🎵'
                     };
                     soundArray.push(soundData);
                 });
@@ -180,7 +206,9 @@ class StorageManager {
                         loop: soundData.loop || false,
                         folderId: soundData.folderId || 'default',
                         blob: blob,
-                        fileName: soundData.fileName
+                        fileName: soundData.fileName,
+                        color: soundData.color || '#6c5ce7',
+                        icon: soundData.icon || '🎵'
                     });
                 }
                 
@@ -241,6 +269,7 @@ class StorageManager {
         ]);
         
         return {
+            version: 2,
             folders: Array.from(folders.values()),
             sounds: Array.from(sounds.entries()).map(([id, sound]) => ({
                 id,
