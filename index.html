@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D&D Soundboard MVP</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎲 D&D Soundboard MVP</h1>
+            <p class="subtitle">Load 3 tracks and play them simultaneously without interrupting background music</p>
+        </header>
+
+        <div class="upload-section">
+            <h2 class="upload-title">📁 Upload Audio Tracks</h2>
+            <div class="upload-area">
+                <input type="file" class="file-input" accept="audio/*" multiple>
+                <button class="upload-btn" id="uploadBtn">Upload Tracks</button>
+            </div>
+            <div class="status" id="uploadStatus">No tracks loaded</div>
+        </div>
+
+        <div class="soundboard" id="soundboard">
+            <!-- Sound cards will be generated here -->
+        </div>
+
+        <div class="mixer-panel">
+            <div class="mixer-header">
+                <h2>🎚️ Mixer Panel</h2>
+                <div class="active-count">Active: <span id="activeCount">0</span></div>
+            </div>
+            <div class="mixer-controls">
+                <button class="mixer-btn sync-btn" id="syncAll">Sync All Tracks</button>
+                <button class="mixer-btn pause-all-btn" id="pauseAll">Pause All</button>
+                <button class="mixer-btn stop-all-btn" id="stopAll">Stop All</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
