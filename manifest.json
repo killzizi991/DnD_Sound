@@ -1,7 +1,7 @@
 {
-  "name": "D&D Soundboard MVP",
-  "short_name": "D&D Sounds",
-  "description": "Minimal MVP for D&D soundboard with simultaneous playback",
+  "name": "Звуковая панель D&D",
+  "short_name": "Звуки D&D",
+  "description": "Минимальная версия звуковой панели для D&D с одновременным воспроизведением",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1a2e",
