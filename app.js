@@ -1,4 +1,3 @@
-
 // app.js
 class AudioEngine {
     constructor() {
@@ -8,7 +7,63 @@ class AudioEngine {
         this.masterVolume = 1.0;
         this.folders = new Map();
         this.nextFolderId = 1;
+        this.storageManager = new StorageManager();
         this.initDefaultFolders();
+        this.initStorage();
+    }
+
+    async initStorage() {
+        try {
+            await this.storageManager.init();
+            await this.loadFromStorage();
+            console.log('Data loaded from IndexedDB');
+        } catch (error) {
+            console.error('Failed to load from storage:', error);
+        }
+    }
+
+    async loadFromStorage() {
+        try {
+            const [folders, sounds] = await Promise.all([
+                this.storageManager.loadFolders(),
+                this.storageManager.loadSounds()
+            ]);
+
+            // Load folders
+            folders.forEach((folder, id) => {
+                this.folders.set(id, folder);
+                this.nextFolderId = Math.max(this.nextFolderId, parseInt(id.split('_')[1]) || 0) + 1;
+            });
+
+            // Load sounds
+            for (const [id, soundData] of sounds) {
+                if (soundData.blob) {
+                    await this.loadSoundFromBlob(id, soundData.blob, soundData.name, 
+                                               soundData.folderId, soundData.volume, soundData.loop);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading from storage:', error);
+        }
+    }
+
+    async saveToStorage() {
+        try {
+            await Promise.all([
+                this.storageManager.saveFolders(this.folders),
+                this.storageManager.saveSounds(this.sounds)
+            ]);
+        } catch (error) {
+            console.error('Error saving to storage:', error);
+        }
+    }
+
+    async saveSoundSettings(soundId) {
+        const sound = this.sounds.get(soundId);
+        if (sound) {
+            // Individual sound settings are saved in the sounds store
+            await this.saveToStorage();
+        }
     }
 
     initDefaultFolders() {
@@ -30,12 +85,37 @@ class AudioEngine {
                 name: file.name,
                 volume: 1.0,
                 loop: false,
-                folderId: folderId
+                folderId: folderId,
+                blob: file,
+                fileName: file.name
+            });
+            
+            await this.saveToStorage();
+            return true;
+        } catch (error) {
+            console.error('Ошибка загрузки звука:', error);
+            return false;
+        }
+    }
+
+    async loadSoundFromBlob(id, blob, name, folderId = 'default', volume = 1.0, loop = false) {
+        try {
+            const arrayBuffer = await blob.arrayBuffer();
+            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+            
+            this.sounds.set(id, {
+                buffer: audioBuffer,
+                name: name,
+                volume: volume,
+                loop: loop,
+                folderId: folderId,
+                blob: blob,
+                fileName: name
             });
             
             return true;
         } catch (error) {
-            console.error('Ошибка загрузки звука:', error);
+            console.error('Ошибка загрузки звука из Blob:', error);
             return false;
         }
     }
@@ -138,10 +218,11 @@ class AudioEngine {
             if (activeSound.gainNode) {
                 activeSound.gainNode.gain.value = volume * this.masterVolume;
             }
+            this.saveSoundSettings(activeSound.soundId);
         }
     }
 
-    setLoop(id, loop) {
+    async setLoop(id, loop) {
         if (this.sounds.has(id)) {
             const sound = this.sounds.get(id);
             sound.loop = loop;
@@ -152,12 +233,13 @@ class AudioEngine {
                 }
             });
             
+            await this.saveSoundSettings(id);
             return true;
         }
         return false;
     }
 
-    createFolder(name, color = '#6c5ce7', icon = '📁') {
+    async createFolder(name, color = '#6c5ce7', icon = '📁') {
         const folderId = `folder_${this.nextFolderId++}`;
         this.folders.set(folderId, {
             id: folderId,
@@ -165,19 +247,22 @@ class AudioEngine {
             color: color,
             icon: icon
         });
+        
+        await this.saveToStorage();
         return folderId;
     }
 
-    updateFolder(folderId, updates) {
+    async updateFolder(folderId, updates) {
         if (this.folders.has(folderId)) {
             const folder = this.folders.get(folderId);
             Object.assign(folder, updates);
+            await this.saveToStorage();
             return true;
         }
         return false;
     }
 
-    deleteFolder(folderId) {
+    async deleteFolder(folderId) {
         if (folderId === 'default') return false;
         
         this.folders.delete(folderId);
@@ -188,6 +273,7 @@ class AudioEngine {
             }
         });
         
+        await this.saveToStorage();
         return true;
     }
 
@@ -258,6 +344,23 @@ class AudioEngine {
             this.audioContext.resume();
         }
     }
+
+    async exportData() {
+        return await this.storageManager.exportData();
+    }
+
+    async importData(data) {
+        await this.storageManager.importData(data);
+        await this.loadFromStorage();
+    }
+
+    async clearAllData() {
+        await this.storageManager.clearAll();
+        this.sounds.clear();
+        this.folders.clear();
+        this.initDefaultFolders();
+        this.nextFolderId = 1;
+    }
 }
 
 class SoundboardApp {
@@ -285,6 +388,9 @@ class SoundboardApp {
         document.getElementById('stopAll').addEventListener('click', () => this.stopAll());
         document.getElementById('addFolderBtn').addEventListener('click', () => this.showAddFolderDialog());
         document.getElementById('toggleEditBtn').addEventListener('click', () => this.toggleEditMode());
+        document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
+        document.getElementById('importBtn').addEventListener('click', () => this.importData());
+        document.getElementById('clearBtn').addEventListener('click', () => this.clearAllData());
         
         document.addEventListener('click', () => {
             this.audioEngine.resumeAudioContext();
@@ -382,11 +488,11 @@ class SoundboardApp {
         }
     }
 
-    toggleLoop(soundId) {
+    async toggleLoop(soundId) {
         const sound = this.audioEngine.sounds.get(soundId);
         if (sound) {
             const newLoopState = !sound.loop;
-            this.audioEngine.setLoop(soundId, newLoopState);
+            await this.audioEngine.setLoop(soundId, newLoopState);
             this.updateLoopButton(soundId, newLoopState);
             return newLoopState;
         }
@@ -396,10 +502,9 @@ class SoundboardApp {
     showAddFolderDialog() {
         const folderName = prompt('Введите название новой папки:', 'Новая папка');
         if (folderName && folderName.trim()) {
-            const folderId = this.audioEngine.createFolder(folderName.trim());
+            this.audioEngine.createFolder(folderName.trim());
             this.updateStatus(`Создана папка "${folderName}"`);
             this.renderFolderPanel();
-            this.selectFolder(folderId);
         }
     }
 
@@ -524,9 +629,9 @@ class SoundboardApp {
                 this.updateVolume(soundId, volume);
             });
             
-            loopBtn.addEventListener('click', (e) => {
+            loopBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const newLoopState = this.toggleLoop(soundId);
+                const newLoopState = await this.toggleLoop(soundId);
                 loopBtn.classList.toggle('active', newLoopState);
                 loopBtn.innerHTML = newLoopState ? '🔂' : '🔁';
             });
@@ -548,6 +653,7 @@ class SoundboardApp {
         this.stopSound(soundId);
         this.audioEngine.sounds.delete(soundId);
         this.loadedSounds.delete(soundId);
+        this.audioEngine.saveToStorage();
         this.renderSoundboard();
         this.updateStatus('Звук удален');
     }
@@ -600,6 +706,65 @@ class SoundboardApp {
                 this.audioEngine.audioContext.resume();
             }
         }, { once: true });
+    }
+
+    async exportData() {
+        try {
+            const data = await this.audioEngine.exportData();
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'dnd-soundboard-backup.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.updateStatus('Данные экспортированы');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.updateStatus('Ошибка при экспорте данных');
+        }
+    }
+
+    async importData() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                if (confirm('Импортировать данные? Существующие данные будут заменены.')) {
+                    await this.audioEngine.importData(data);
+                    this.renderFolderPanel();
+                    this.renderSoundboard();
+                    this.updateStatus('Данные импортированы');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                this.updateStatus('Ошибка при импорте данных');
+            }
+        };
+        
+        input.click();
+    }
+
+    async clearAllData() {
+        if (confirm('Очистить все данные? Это действие нельзя отменить.')) {
+            await this.audioEngine.clearAllData();
+            this.loadedSounds.clear();
+            this.activeSounds.clear();
+            this.selectedFolder = 'default';
+            this.renderFolderPanel();
+            this.renderSoundboard();
+            this.updateStatus('Все данные очищены');
+        }
     }
 }
 
