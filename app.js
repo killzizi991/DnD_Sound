@@ -21,7 +21,7 @@ class AudioEngine {
             
             return true;
         } catch (error) {
-            console.error('Error loading sound:', error);
+            console.error('Ошибка загрузки звука:', error);
             return false;
         }
     }
@@ -174,7 +174,8 @@ class SoundboardApp {
         this.audioEngine = new AudioEngine();
         this.loadedSounds = new Map();
         this.activeSounds = new Map();
-        this.maxSounds = 3;
+        this.maxSounds = 10; // Увеличиваем лимит для добавления новых звуков
+        this.soundCounter = 0; // Счетчик для уникальных ID звуков
         this.init();
     }
 
@@ -197,21 +198,22 @@ class SoundboardApp {
 
     async uploadTracks() {
         const fileInput = document.querySelector('.file-input');
-        const files = Array.from(fileInput.files).slice(0, this.maxSounds);
+        const files = Array.from(fileInput.files);
         
         if (files.length === 0) {
-            this.updateStatus('Please select audio files first');
+            this.updateStatus('Пожалуйста, сначала выберите аудиофайлы');
             return;
         }
         
         document.getElementById('uploadBtn').disabled = true;
-        this.updateStatus(`Loading ${files.length} track(s)...`);
+        this.updateStatus(`Загрузка ${files.length} трек(ов)...`);
         
         let loadedCount = 0;
         
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            const soundId = `sound_${i}`;
+            // Генерируем уникальный ID для каждого звука, используя счетчик
+            const soundId = `sound_${Date.now()}_${this.soundCounter++}`;
             
             const success = await this.audioEngine.loadSound(soundId, file);
             if (success) {
@@ -224,9 +226,12 @@ class SoundboardApp {
             }
         }
         
-        this.updateStatus(`Loaded ${loadedCount} track(s) successfully`);
+        this.updateStatus(`Успешно загружено ${loadedCount} трек(ов)`);
         document.getElementById('uploadBtn').disabled = false;
         this.renderSoundboard();
+        
+        // Очищаем поле выбора файлов, чтобы можно было загружать те же файлы снова
+        fileInput.value = '';
     }
 
     playSound(soundId) {
@@ -254,16 +259,16 @@ class SoundboardApp {
 
     togglePauseAll() {
         const pauseBtn = document.getElementById('pauseAll');
-        const isPaused = pauseBtn.textContent.includes('Resume');
+        const isPaused = pauseBtn.textContent.includes('Возобновить');
         
         if (isPaused) {
             this.audioEngine.resumeAll();
-            pauseBtn.textContent = 'Pause All';
-            this.updateStatus('Resumed all tracks');
+            pauseBtn.textContent = 'Пауза всех';
+            this.updateStatus('Возобновлено воспроизведение всех треков');
         } else {
             this.audioEngine.pauseAll();
-            pauseBtn.textContent = 'Resume All';
-            this.updateStatus('Paused all tracks');
+            pauseBtn.textContent = 'Возобновить все';
+            this.updateStatus('Пауза всех треков');
         }
     }
 
@@ -271,8 +276,8 @@ class SoundboardApp {
         this.audioEngine.stopAll();
         this.activeSounds.clear();
         this.renderSoundboard();
-        this.updateStatus('Stopped all tracks');
-        document.getElementById('pauseAll').textContent = 'Pause All';
+        this.updateStatus('Остановка всех треков');
+        document.getElementById('pauseAll').textContent = 'Пауза всех';
         updateActiveCount();
     }
 
@@ -292,10 +297,10 @@ class SoundboardApp {
             emptyCard.className = 'sound-card';
             emptyCard.innerHTML = `
                 <div class="sound-icon">🎵</div>
-                <div class="sound-name">No tracks loaded</div>
+                <div class="sound-name">Нет загруженных треков</div>
                 <div class="sound-controls">
-                    <button class="play-btn" disabled>Play</button>
-                    <button class="stop-btn" disabled>Stop</button>
+                    <button class="play-btn" disabled>Воспроизвести</button>
+                    <button class="stop-btn" disabled>Остановить</button>
                 </div>
             `;
             soundboard.appendChild(emptyCard);
@@ -399,7 +404,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('sw.js').catch(error => {
-                console.log('ServiceWorker registration failed:', error);
+                console.log('Регистрация ServiceWorker не удалась:', error);
             });
         });
     }
