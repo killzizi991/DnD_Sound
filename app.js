@@ -10,6 +10,11 @@ class AudioEngine {
         this.storageManager = new StorageManager();
         this.initDefaultFolders();
         this.initStorage();
+        
+        // Drag and drop
+        this.dragSource = null;
+        this.dragType = null;
+        this.dropTarget = null;
     }
 
     async initStorage() {
@@ -244,13 +249,15 @@ class AudioEngine {
         return false;
     }
 
-    async createFolder(name, color = '#6c5ce7', icon = '📁') {
+    async createFolder(name, color = '#6c5ce7', icon = '📁', parentId = null) {
         const folderId = `folder_${this.nextFolderId++}`;
         this.folders.set(folderId, {
             id: folderId,
             name: name,
             color: color,
-            icon: icon
+            icon: icon,
+            parentId: parentId,
+            order: this.getFoldersByParent(parentId).length
         });
         
         await this.saveToStorage();
@@ -270,13 +277,21 @@ class AudioEngine {
     async deleteFolder(folderId) {
         if (folderId === 'default') return false;
         
-        this.folders.delete(folderId);
-        
+        // Move all sounds from this folder to default
         this.sounds.forEach((sound, soundId) => {
             if (sound.folderId === folderId) {
                 sound.folderId = 'default';
             }
         });
+        
+        // Move all subfolders to parent or default
+        this.folders.forEach((folder, id) => {
+            if (folder.parentId === folderId) {
+                folder.parentId = this.folders.get(folderId).parentId || null;
+            }
+        });
+        
+        this.folders.delete(folderId);
         
         await this.saveToStorage();
         return true;
@@ -293,6 +308,91 @@ class AudioEngine {
             }
         });
         return folderSounds;
+    }
+
+    getFoldersByParent(parentId) {
+        const folders = [];
+        this.folders.forEach((folder, folderId) => {
+            if (folder.parentId === parentId && folderId !== 'default') {
+                folders.push({
+                    id: folderId,
+                    ...folder
+                });
+            }
+        });
+        // Sort by order
+        return folders.sort((a, b) => a.order - b.order);
+    }
+
+    getAllFoldersFlat() {
+        const result = [];
+        this.folders.forEach((folder, folderId) => {
+            if (folderId !== 'default') {
+                result.push({
+                    id: folderId,
+                    ...folder
+                });
+            }
+        });
+        return result;
+    }
+
+    async moveSoundToFolder(soundId, newFolderId) {
+        const sound = this.sounds.get(soundId);
+        if (sound && this.folders.has(newFolderId)) {
+            sound.folderId = newFolderId;
+            await this.saveSoundSettings(soundId);
+            return true;
+        }
+        return false;
+    }
+
+    async moveFolder(folderId, newParentId) {
+        const folder = this.folders.get(folderId);
+        if (!folder || folderId === 'default') return false;
+        
+        // Check for circular reference
+        if (newParentId) {
+            let current = newParentId;
+            while (current) {
+                if (current === folderId) return false;
+                const parentFolder = this.folders.get(current);
+                current = parentFolder ? parentFolder.parentId : null;
+            }
+        }
+        
+        folder.parentId = newParentId;
+        folder.order = this.getFoldersByParent(newParentId).length;
+        
+        await this.saveToStorage();
+        return true;
+    }
+
+    async updateFolderOrder(folderId, newOrder) {
+        const folder = this.folders.get(folderId);
+        if (!folder) return false;
+        
+        const parentId = folder.parentId;
+        const siblings = this.getFoldersByParent(parentId);
+        
+        // Remove from current position
+        const currentIndex = siblings.findIndex(f => f.id === folderId);
+        if (currentIndex !== -1) {
+            siblings.splice(currentIndex, 1);
+        }
+        
+        // Insert at new position
+        siblings.splice(newOrder, 0, folder);
+        
+        // Update all orders
+        siblings.forEach((f, index) => {
+            if (this.folders.has(f.id)) {
+                this.folders.get(f.id).order = index;
+            }
+        });
+        
+        await this.saveToStorage();
+        return true;
     }
 
     getActiveSoundsByFolder(folderId) {
@@ -366,6 +466,21 @@ class AudioEngine {
         this.initDefaultFolders();
         this.nextFolderId = 1;
     }
+
+    // Drag and drop methods
+    setDragSource(source, type) {
+        this.dragSource = source;
+        this.dragType = type;
+    }
+
+    getDragSource() {
+        return { source: this.dragSource, type: this.dragType };
+    }
+
+    clearDragSource() {
+        this.dragSource = null;
+        this.dragType = null;
+    }
 }
 
 class SoundboardApp {
@@ -376,6 +491,8 @@ class SoundboardApp {
         this.soundCounter = 0;
         this.selectedFolder = 'default';
         this.editMode = false;
+        this.searchQuery = '';
+        this.filterFolder = 'all';
         this.soundEditor = new SoundEditor(this);
         this.init();
     }
@@ -385,6 +502,7 @@ class SoundboardApp {
         this.renderFolderPanel();
         this.renderSoundboard();
         this.checkAudioContext();
+        this.setupDragAndDrop();
     }
 
     bindEvents() {
@@ -398,8 +516,34 @@ class SoundboardApp {
         document.getElementById('importBtn').addEventListener('click', () => this.importData());
         document.getElementById('clearBtn').addEventListener('click', () => this.clearAllData());
         
+        // Search and filter
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            this.searchQuery = e.target.value.toLowerCase();
+            this.renderSoundboard();
+        });
+        
+        document.getElementById('filterFolder').addEventListener('change', (e) => {
+            this.filterFolder = e.target.value;
+            this.renderSoundboard();
+        });
+        
         document.addEventListener('click', () => {
             this.audioEngine.resumeAudioContext();
+        });
+    }
+
+    setupDragAndDrop() {
+        // Global drop handler
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const dragData = this.audioEngine.getDragSource();
+            if (dragData.source && dragData.type) {
+                this.audioEngine.clearDragSource();
+            }
         });
     }
 
@@ -508,7 +652,11 @@ class SoundboardApp {
     showAddFolderDialog() {
         const folderName = prompt('Введите название новой папки:', 'Новая папка');
         if (folderName && folderName.trim()) {
-            this.audioEngine.createFolder(folderName.trim());
+            let parentId = null;
+            if (this.selectedFolder !== 'default') {
+                parentId = this.selectedFolder;
+            }
+            this.audioEngine.createFolder(folderName.trim(), '#6c5ce7', '📁', parentId);
             this.updateStatus(`Создана папка "${folderName}"`);
             this.renderFolderPanel();
         }
@@ -540,37 +688,168 @@ class SoundboardApp {
         }
         
         this.renderSoundboard();
+        this.renderFolderPanel();
     }
 
     renderFolderPanel() {
         const folderPanel = document.getElementById('folderPanel');
         folderPanel.innerHTML = '';
         
-        this.audioEngine.folders.forEach((folder, folderId) => {
-            const folderElement = document.createElement('div');
-            folderElement.className = `folder-item ${this.selectedFolder === folderId ? 'active' : ''}`;
-            folderElement.style.borderLeftColor = folder.color;
-            folderElement.innerHTML = `
-                <div class="folder-icon">${folder.icon}</div>
-                <div class="folder-name">${folder.name}</div>
-                <div class="folder-count">${this.audioEngine.getSoundsByFolder(folderId).length}</div>
-            `;
-            
-            folderElement.addEventListener('click', () => {
-                this.selectFolder(folderId);
-            });
-            
-            folderPanel.appendChild(folderElement);
+        // Add "All sounds" option
+        const allFolderElement = this.createFolderElement('all', {
+            id: 'all',
+            name: 'Все звуки',
+            color: '#6c5ce7',
+            icon: '📁'
         });
+        folderPanel.appendChild(allFolderElement);
+        
+        // Render folder tree
+        const renderFolders = (parentId = null, level = 0) => {
+            const folders = this.audioEngine.getFoldersByParent(parentId);
+            folders.forEach(folder => {
+                const folderElement = this.createFolderElement(folder.id, folder, level);
+                folderPanel.appendChild(folderElement);
+                
+                // Render subfolders
+                renderFolders(folder.id, level + 1);
+            });
+        };
+        
+        renderFolders();
+    }
+
+    createFolderElement(folderId, folder, level = 0) {
+        const folderElement = document.createElement('div');
+        folderElement.className = `folder-item ${this.selectedFolder === folderId ? 'active' : ''}`;
+        folderElement.style.borderLeftColor = folder.color;
+        folderElement.style.paddingLeft = `${20 + (level * 20)}px`;
+        folderElement.dataset.folderId = folderId;
+        folderElement.dataset.folderName = folder.name;
+        
+        folderElement.innerHTML = `
+            <div class="folder-icon">${folder.icon}</div>
+            <div class="folder-name">${folder.name}</div>
+            <div class="folder-count">${folderId === 'all' ? this.audioEngine.sounds.size : this.audioEngine.getSoundsByFolder(folderId).length}</div>
+        `;
+        
+        if (folderId !== 'all') {
+            // Make folder draggable in edit mode
+            if (this.editMode) {
+                folderElement.setAttribute('draggable', 'true');
+                folderElement.addEventListener('dragstart', (e) => this.handleFolderDragStart(e, folderId));
+                folderElement.addEventListener('dragover', (e) => this.handleDragOver(e));
+                folderElement.addEventListener('dragenter', (e) => this.handleDragEnter(e));
+                folderElement.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+                folderElement.addEventListener('drop', (e) => this.handleFolderDrop(e, folderId));
+            }
+        }
+        
+        folderElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.selectFolder(folderId);
+        });
+        
+        return folderElement;
+    }
+
+    handleFolderDragStart(e, folderId) {
+        e.stopPropagation();
+        this.audioEngine.setDragSource(folderId, 'folder');
+        e.dataTransfer.setData('text/plain', folderId);
+        e.dataTransfer.effectAllowed = 'move';
+        e.target.classList.add('dragging');
+    }
+
+    handleSoundDragStart(e, soundId) {
+        e.stopPropagation();
+        this.audioEngine.setDragSource(soundId, 'sound');
+        e.dataTransfer.setData('text/plain', soundId);
+        e.dataTransfer.effectAllowed = 'move';
+        e.target.classList.add('dragging');
+    }
+
+    handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragEnter(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+
+    async handleFolderDrop(e, targetFolderId) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dragData = this.audioEngine.getDragSource();
+        if (!dragData.source) return;
+        
+        const sourceId = dragData.source;
+        const type = dragData.type;
+        
+        e.currentTarget.classList.remove('drag-over');
+        
+        if (type === 'sound') {
+            // Move sound to folder
+            const success = await this.audioEngine.moveSoundToFolder(sourceId, targetFolderId);
+            if (success) {
+                this.updateStatus(`Звук перемещен в папку`);
+                this.renderSoundboard();
+            }
+        } else if (type === 'folder' && sourceId !== targetFolderId) {
+            // Move folder to new parent
+            const success = await this.audioEngine.moveFolder(sourceId, targetFolderId);
+            if (success) {
+                this.updateStatus(`Папка перемещена`);
+                this.renderFolderPanel();
+            }
+        }
+        
+        this.audioEngine.clearDragSource();
     }
 
     renderSoundboard() {
         const soundboard = document.getElementById('soundboard');
         soundboard.innerHTML = '';
         
-        const folderSounds = this.audioEngine.getSoundsByFolder(this.selectedFolder);
+        let soundsToDisplay = [];
         
-        if (folderSounds.length === 0) {
+        // Get sounds based on selected folder
+        if (this.selectedFolder === 'all') {
+            // Get all sounds
+            this.audioEngine.sounds.forEach((sound, soundId) => {
+                soundsToDisplay.push({
+                    id: soundId,
+                    ...sound
+                });
+            });
+        } else {
+            // Get sounds from selected folder
+            soundsToDisplay = this.audioEngine.getSoundsByFolder(this.selectedFolder);
+        }
+        
+        // Apply search filter
+        if (this.searchQuery) {
+            soundsToDisplay = soundsToDisplay.filter(sound => 
+                sound.name.toLowerCase().includes(this.searchQuery)
+            );
+        }
+        
+        // Apply folder filter
+        if (this.filterFolder !== 'all') {
+            soundsToDisplay = soundsToDisplay.filter(sound => 
+                sound.folderId === this.filterFolder
+            );
+        }
+        
+        if (soundsToDisplay.length === 0) {
             const emptyCard = document.createElement('div');
             emptyCard.className = 'sound-card empty';
             emptyCard.innerHTML = `
@@ -585,7 +864,7 @@ class SoundboardApp {
             return;
         }
         
-        folderSounds.forEach((sound) => {
+        soundsToDisplay.forEach((sound) => {
             const soundId = sound.id;
             const isActive = this.activeSounds.has(soundId);
             const isLoop = sound.loop;
@@ -593,6 +872,8 @@ class SoundboardApp {
             const soundCard = document.createElement('div');
             soundCard.className = `sound-card ${isActive ? 'active' : ''}`;
             soundCard.style.backgroundColor = sound.color || '#1f4068';
+            soundCard.dataset.soundId = soundId;
+            
             soundCard.innerHTML = `
                 ${this.editMode ? `
                     <div class="edit-controls">
@@ -602,6 +883,7 @@ class SoundboardApp {
                 ` : ''}
                 <div class="sound-icon">${sound.icon || this.getSoundEmoji(sound.name)}</div>
                 <div class="sound-name">${sound.name}</div>
+                <div class="sound-folder">${this.audioEngine.folders.get(sound.folderId)?.name || 'Без папки'}</div>
                 <div class="sound-settings">
                     <div class="volume-control">
                         <span>🔈</span>
@@ -618,6 +900,16 @@ class SoundboardApp {
                     <button class="stop-btn" data-sound="${soundId}">⏹️</button>
                 </div>
             `;
+            
+            // Make draggable in edit mode
+            if (this.editMode) {
+                soundCard.setAttribute('draggable', 'true');
+                soundCard.addEventListener('dragstart', (e) => this.handleSoundDragStart(e, soundId));
+                soundCard.addEventListener('dragover', (e) => this.handleDragOver(e));
+                soundCard.addEventListener('dragenter', (e) => this.handleDragEnter(e));
+                soundCard.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+                soundCard.addEventListener('drop', (e) => this.handleSoundDrop(e, soundId));
+            }
             
             const playBtn = soundCard.querySelector('.play-btn');
             const stopBtn = soundCard.querySelector('.stop-btn');
@@ -669,6 +961,28 @@ class SoundboardApp {
         });
     }
 
+    async handleSoundDrop(e, targetSoundId) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dragData = this.audioEngine.getDragSource();
+        if (!dragData.source || dragData.type !== 'sound') return;
+        
+        const sourceSoundId = dragData.source;
+        const targetSound = this.audioEngine.sounds.get(targetSoundId);
+        
+        if (targetSound) {
+            // Move source sound to target sound's folder
+            const success = await this.audioEngine.moveSoundToFolder(sourceSoundId, targetSound.folderId);
+            if (success) {
+                this.updateStatus(`Звук перемещен в папку "${this.audioEngine.folders.get(targetSound.folderId)?.name}"`);
+                this.renderSoundboard();
+            }
+        }
+        
+        this.audioEngine.clearDragSource();
+    }
+
     deleteSound(soundId) {
         this.stopSound(soundId);
         this.audioEngine.sounds.delete(soundId);
@@ -679,7 +993,7 @@ class SoundboardApp {
     }
 
     updateSoundCard(soundId, isActive) {
-        const card = document.querySelector(`[data-sound="${soundId}"]`)?.closest('.sound-card');
+        const card = document.querySelector(`[data-sound-id="${soundId}"]`);
         if (card) {
             card.classList.toggle('active', isActive);
             const playBtn = card.querySelector('.play-btn');
@@ -691,7 +1005,7 @@ class SoundboardApp {
     }
 
     updateLoopButton(soundId, isLoop) {
-        const card = document.querySelector(`[data-sound="${soundId}"]`)?.closest('.sound-card');
+        const card = document.querySelector(`[data-sound-id="${soundId}"]`);
         if (card) {
             const loopBtn = card.querySelector('.loop-btn');
             if (loopBtn) {
