@@ -2,7 +2,7 @@
 class StorageManager {
     constructor() {
         this.dbName = 'DndSoundboardDB';
-        this.dbVersion = 2; // Увеличиваем версию для новых полей
+        this.dbVersion = 3; // Увеличиваем версию для новых полей
         this.db = null;
         this.initialized = false;
     }
@@ -62,6 +62,26 @@ class StorageManager {
                             sound.color = sound.color || '#6c5ce7';
                             sound.icon = sound.icon || '🎵';
                             cursor.update(sound);
+                            cursor.continue();
+                        }
+                    };
+                }
+                
+                // Миграция с версии 2 на версию 3: добавление полей parentId и order для папок
+                if (oldVersion < 3) {
+                    const transaction = event.target.transaction;
+                    const foldersStore = transaction.objectStore('folders');
+                    
+                    // Открываем курсор для обновления существующих записей
+                    const request = foldersStore.openCursor();
+                    request.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            const folder = cursor.value;
+                            // Добавляем новые поля со значениями по умолчанию
+                            folder.parentId = folder.parentId || null;
+                            folder.order = folder.order || 0;
+                            cursor.update(folder);
                             cursor.continue();
                         }
                     };
@@ -269,12 +289,12 @@ class StorageManager {
         ]);
         
         return {
-            version: 2,
+            version: 3,
             folders: Array.from(folders.values()),
             sounds: Array.from(sounds.entries()).map(([id, sound]) => ({
                 id,
                 ...sound,
-                audioData: sound.blob ? this.blobToArrayBuffer(sound.blob) : null
+                audioData: sound.blob ? await this.blobToArrayBuffer(sound.blob) : null
             }))
         };
     }
